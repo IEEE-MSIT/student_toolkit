@@ -1,14 +1,14 @@
-import { holidays } from "../data/holidays.js";
+import Holiday from "../models/Holidays.js";
 
-export const getHolidays = (req, res) => {
+export const getHolidays = async (req, res) => {
     try {
         const { type, upcoming } = req.query;
 
-        let result = [...holidays];
+        const query = {};
 
         // Filter by type
         if (type) {
-            result = result.filter((holiday) => holiday.type === type);
+            query.type = type;
         }
 
         // Show only upcoming holidays
@@ -16,13 +16,10 @@ export const getHolidays = (req, res) => {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            result = result.filter(
-                (holiday) => new Date(holiday.date) >= today
-            );
+            query.date = { $gte: today };
         }
 
-        // Sort by date
-        result.sort((a, b) => new Date(a.date) - new Date(b.date));
+        const result = await Holiday.find(query).sort({ date: 1 });
 
         res.json({
             success: true,
