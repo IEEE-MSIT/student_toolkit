@@ -16,9 +16,8 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import ToolsPage from "./pages/ToolsPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
+import GpaPlannerPage from "./pages/tools/GpaPlannerPage.jsx";
 
-import CGPAPage from "./pages/tools/CGPAPage.jsx";
-import SGPAPage from "./pages/tools/SGPAPage.jsx";
 import PercentagePage from "./pages/tools/PercentagePage.jsx";
 import ImageCompressorPage from "./pages/tools/ImageCompressorPage.jsx";
 import AttendancePage from "./pages/tools/AttendancePage.jsx";
@@ -63,8 +62,8 @@ function App() {
   const { restoreSession, isLoading } = useAuthStore();
 
   useEffect(() => {
-    restoreSession();
-  }, []);
+    void restoreSession();
+  }, [restoreSession]);
 
   if (isLoading) {
     return null;
@@ -97,9 +96,11 @@ function App() {
 
               <Route path="/calendar" element={<CalendarPage />} />
 
-              <Route path="/tools/cgpa" element={<CGPAPage />} />
+              <Route path="/tools/gpa" element={<GpaPlannerPage />} />
 
-              <Route path="/tools/sgpa" element={<SGPAPage />} />
+              <Route path="/tools/cgpa" element={<Navigate to="/tools/gpa" replace />} />
+
+              <Route path="/tools/sgpa" element={<Navigate to="/tools/gpa" replace />} />
 
               <Route path="/tools/percentage" element={<PercentagePage />} />
 

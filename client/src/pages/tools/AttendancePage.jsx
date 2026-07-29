@@ -1,115 +1,348 @@
-import { useState } from 'react';
-import { FiPlus } from 'react-icons/fi';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FiPlus, FiTrash2 } from "react-icons/fi";
+import toast from "react-hot-toast";
+import api from "../../services/api/axiosInstance";
+
+const createRecord = () => ({
+  subjectName: "",
+  subjectCode: "",
+  attended: 0,
+  total: 0,
+  requiredPercentage: 75,
+});
+
+const getErrorMessage = (error, fallback) =>
+  error?.response?.data?.message || error?.data?.message || fallback;
+
+const calculateMetrics = (record) => {
+  const attended = Number(record.attended) || 0;
+  const total = Number(record.total) || 0;
+  const requiredPercentage = Number(record.requiredPercentage) || 75;
+  const percentage = total > 0 ? (attended / total) * 100 : 0;
+  const canSkip = total > 0 ? Math.max(0, Math.floor(attended / (requiredPercentage / 100) - total)) : 0;
+  const mustAttend =
+    total > 0 && percentage < requiredPercentage
+      ? Math.max(
+          0,
+          Math.ceil((requiredPercentage * total - 100 * attended) / (100 - requiredPercentage))
+        )
+      : 0;
+
+  return {
+    percentage: percentage.toFixed(2),
+    canSkip,
+    mustAttend,
+  };
+};
+
+const formatDateTime = (value) => {
+  if (!value) {
+    return "Not saved yet";
+  }
+
+  return new Date(value).toLocaleString();
+};
 
 function AttendanceTrackerPage() {
-  const [records, setRecords] = useState([
-    { subject: '', attended: '', total: '', required: 75 },
-  ]);
+  const [records, setRecords] = useState([createRecord()]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [saveState, setSaveState] = useState("saved");
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const saveTimeout = useRef(null);
+  const shouldAutoSave = useRef(false);
 
-  const calculateMetrics = () => {
-    const current = records
-      .filter((r) => r.attended && r.total)
-      .map((r) => ({
-        percentage: (r.attended / r.total) * 100,
-        required: r.required,
-        attended: r.attended,
-        total: r.total,
-      }))[0];
+  useEffect(() => {
+    const fetchAttendance = async () => {
+      try {
+        const response = await api.get("/user/attendance");
+        const savedRecords = response.data?.records || [];
+        setRecords(savedRecords.length ? savedRecords : [createRecord()]);
+        setLastSavedAt(response.data?.updatedAt || null);
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Failed to load attendance"));
+        setRecords([createRecord()]);
+      } finally {
+        setIsLoading(false);
+        shouldAutoSave.current = true;
+      }
+    };
 
-    if (!current) return { canSkip: 0, mustAttend: 0, percentage: 0 };
+    fetchAttendance();
 
-    const classesNeeded = Math.ceil((current.required / 100) * current.total);
-    const mustAttend = classesNeeded - current.attended;
-    const totalRemaining = current.total - current.attended;
-    const canSkip = totalRemaining - mustAttend;
+    return () => {
+      if (saveTimeout.current) {
+        clearTimeout(saveTimeout.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!shouldAutoSave.current || isLoading) {
+      return;
+    }
+
+    if (saveTimeout.current) {
+      clearTimeout(saveTimeout.current);
+    }
+
+    setSaveState("saving");
+    saveTimeout.current = setTimeout(async () => {
+      try {
+        const response = await api.put("/user/attendance", { records });
+        const savedRecords = response.data?.records || [];
+        setRecords(savedRecords.length ? savedRecords : [createRecord()]);
+        setLastSavedAt(response.data?.updatedAt || null);
+        setSaveState("saved");
+      } catch (error) {
+        setSaveState("error");
+        toast.error(getErrorMessage(error, "Failed to save attendance"));
+      }
+    }, 700);
+
+    return () => {
+      if (saveTimeout.current) {
+        clearTimeout(saveTimeout.current);
+      }
+    };
+  }, [records, isLoading]);
+
+  const overallSummary = useMemo(() => {
+    const totals = records.reduce(
+      (accumulator, record) => ({
+        attended: accumulator.attended + (Number(record.attended) || 0),
+        total: accumulator.total + (Number(record.total) || 0),
+      }),
+      { attended: 0, total: 0 }
+    );
+
+    const percentage =
+      totals.total > 0 ? ((totals.attended / totals.total) * 100).toFixed(2) : "0.00";
 
     return {
-      percentage: current.percentage.toFixed(2),
-      canSkip: Math.max(0, canSkip),
-      mustAttend: Math.max(0, mustAttend),
+      attended: totals.attended,
+      total: totals.total,
+      percentage,
     };
-  };
-
-  const metrics = calculateMetrics();
+  }, [records]);
 
   const handleAddRecord = () => {
-    setRecords([...records, { subject: '', attended: '', total: '', required: 75 }]);
+    setRecords((current) => [...current, createRecord()]);
   };
 
-  const handleChange = (idx, field, value) => {
-    const updated = [...records];
-    updated[idx][field] = value;
-    setRecords(updated);
+  const handleRemoveRecord = (index) => {
+    setRecords((current) => {
+      const next = current.filter((_, currentIndex) => currentIndex !== index);
+      return next.length ? next : [createRecord()];
+    });
   };
+
+  const handleChange = (index, field, value) => {
+    setRecords((current) =>
+      current.map((record, currentIndex) =>
+        currentIndex === index
+          ? {
+              ...record,
+              [field]:
+                field === "subjectName" || field === "subjectCode"
+                  ? value
+                  : Math.max(0, Number(value) || 0),
+            }
+          : record
+      )
+    );
+  };
+
+  if (isLoading) {
+    return null;
+  }
 
   return (
     <section className="space-y-8">
-      <div className="rounded-2xl border border-border dark:border-border-dark bg-surface dark:bg-surface-dark p-8 shadow-card transition-colors duration-300">
-        <h1 className="text-3xl font-serif font-bold text-foreground dark:text-white">Attendance Tracker</h1>
-        <p className="mt-2 text-sm text-foreground-muted dark:text-slate-400">Track attendance and manage skip days</p>
+      <div className="rounded-2xl border border-border bg-surface p-8 shadow-card transition-colors duration-300 dark:border-border-dark dark:bg-surface-dark">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-foreground dark:text-white">
+              Attendance Tracker
+            </h1>
+            <p className="mt-2 text-sm text-foreground-muted dark:text-slate-400">
+              Attendance saves automatically and stays updated every time you revisit this tool.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm transition-colors dark:border-border-dark dark:bg-surface-dark-elevated">
+            <p className="font-semibold text-foreground dark:text-white">
+              {saveState === "saving"
+                ? "Updating attendance..."
+                : saveState === "error"
+                  ? "Update failed"
+                  : "Attendance synced"}
+            </p>
+            <p className="mt-1 text-xs text-foreground-muted dark:text-slate-400">
+              Last updated: {formatDateTime(lastSavedAt)}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <div className="rounded-2xl border border-border dark:border-border-dark bg-surface dark:bg-surface-dark p-6 shadow-card transition-colors duration-300">
-          <div className="space-y-4">
-            {records.map((record, idx) => (
-              <div key={idx} className="rounded-xl border border-border dark:border-border-dark bg-background dark:bg-surface-dark-elevated p-4 space-y-3 transition-colors duration-300">
-                <input
-                  type="text"
-                  placeholder="Subject name"
-                  value={record.subject}
-                  onChange={(e) => handleChange(idx, 'subject', e.target.value)}
-                  className="w-full rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-elevated text-foreground dark:text-white px-3.5 py-2 text-sm outline-none focus:border-primary dark:focus:border-secondary transition-all"
-                />
-                <div className="grid grid-cols-3 gap-3">
-                  <input
-                    type="number"
-                    placeholder="Attended"
-                    value={record.attended}
-                    onChange={(e) => handleChange(idx, 'attended', e.target.value)}
-                    className="rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-elevated text-foreground dark:text-white px-3.5 py-2 text-sm outline-none focus:border-primary dark:focus:border-secondary transition-all"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Total"
-                    value={record.total}
-                    onChange={(e) => handleChange(idx, 'total', e.target.value)}
-                    className="rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-elevated text-foreground dark:text-white px-3.5 py-2 text-sm outline-none focus:border-primary dark:focus:border-secondary transition-all"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Required %"
-                    value={record.required}
-                    onChange={(e) => handleChange(idx, 'required', e.target.value)}
-                    className="rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-elevated text-foreground dark:text-white px-3.5 py-2 text-sm outline-none focus:border-primary dark:focus:border-secondary transition-all"
-                  />
+      <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+        <div className="space-y-4">
+          {records.map((record, index) => {
+            const metrics = calculateMetrics(record);
+
+            return (
+              <div
+                key={`${record.subjectCode || record.subjectName || "record"}-${index}`}
+                className="rounded-2xl border border-border bg-surface p-6 shadow-card transition-colors duration-300 dark:border-border-dark dark:bg-surface-dark"
+              >
+                <div className="grid gap-4 lg:grid-cols-[1.4fr_0.8fr_auto]">
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-foreground dark:text-slate-300">
+                          Subject Name
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g., Data Structures"
+                          value={record.subjectName}
+                          onChange={(event) =>
+                            handleChange(index, "subjectName", event.target.value)
+                          }
+                          className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm text-foreground outline-none transition-all focus:border-primary dark:border-border-dark dark:bg-surface-dark-elevated dark:text-white dark:focus:border-secondary"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-foreground dark:text-slate-300">
+                          Subject Code
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g., CIC-209"
+                          value={record.subjectCode}
+                          onChange={(event) =>
+                            handleChange(index, "subjectCode", event.target.value.toUpperCase())
+                          }
+                          className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm uppercase text-foreground outline-none transition-all focus:border-primary dark:border-border-dark dark:bg-surface-dark-elevated dark:text-white dark:focus:border-secondary"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-foreground dark:text-slate-300">
+                          Attended
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={record.attended}
+                          onChange={(event) =>
+                            handleChange(index, "attended", event.target.value)
+                          }
+                          className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm text-foreground outline-none transition-all focus:border-primary dark:border-border-dark dark:bg-surface-dark-elevated dark:text-white dark:focus:border-secondary"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-foreground dark:text-slate-300">
+                          Total
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={record.total}
+                          onChange={(event) =>
+                            handleChange(index, "total", event.target.value)
+                          }
+                          className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm text-foreground outline-none transition-all focus:border-primary dark:border-border-dark dark:bg-surface-dark-elevated dark:text-white dark:focus:border-secondary"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-foreground dark:text-slate-300">
+                          Required %
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={record.requiredPercentage}
+                          onChange={(event) =>
+                            handleChange(index, "requiredPercentage", event.target.value)
+                          }
+                          className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm text-foreground outline-none transition-all focus:border-primary dark:border-border-dark dark:bg-surface-dark-elevated dark:text-white dark:focus:border-secondary"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-1">
+                    <div className="rounded-xl bg-gradient-to-br from-primary to-primary-dark p-4 text-center text-white shadow-glow">
+                      <p className="text-xs font-medium opacity-80">Current %</p>
+                      <p className="mt-2 text-3xl font-serif font-bold">{metrics.percentage}%</p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-center dark:border-emerald-900/30 dark:bg-emerald-950/20">
+                      <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                        Can skip
+                      </p>
+                      <p className="mt-2 text-3xl font-serif font-bold text-emerald-600 dark:text-emerald-400">
+                        {metrics.canSkip}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-center dark:border-red-900/30 dark:bg-red-950/20">
+                      <p className="text-xs font-semibold text-red-700 dark:text-red-400">
+                        Must attend
+                      </p>
+                      <p className="mt-2 text-3xl font-serif font-bold text-red-600 dark:text-red-400">
+                        {metrics.mustAttend}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleRemoveRecord(index)}
+                    className="self-start rounded-xl bg-red-50 p-3 text-red-600 transition-all hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/30"
+                    title="Remove subject"
+                  >
+                    <FiTrash2 className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
+
           <button
             onClick={handleAddRecord}
-            className="mt-4 flex items-center gap-2 rounded-full bg-secondary hover:bg-secondary-hover px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200 shadow-sm"
+            className="flex items-center gap-2 rounded-full bg-secondary px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-secondary-hover"
           >
             <FiPlus className="h-4 w-4" />
             Add Subject
           </button>
         </div>
 
-        <div className="rounded-2xl border border-border dark:border-border-dark bg-surface dark:bg-surface-dark p-6 shadow-card space-y-6 transition-colors duration-300">
-          <div className="text-center rounded-xl bg-gradient-to-br from-primary to-primary-dark p-6 text-white shadow-glow">
-            <p className="text-sm opacity-80 font-medium">Current %</p>
-            <p className="mt-2 text-4xl font-serif font-bold">{metrics.percentage}%</p>
+        <div className="rounded-2xl border border-border bg-surface p-6 shadow-card transition-colors duration-300 dark:border-border-dark dark:bg-surface-dark">
+          <h2 className="text-xl font-serif font-semibold text-foreground dark:text-white">
+            Overall Summary
+          </h2>
+          <div className="mt-6 rounded-2xl bg-gradient-to-br from-primary to-primary-dark p-6 text-center text-white shadow-glow">
+            <p className="text-sm opacity-80">Overall Attendance</p>
+            <p className="mt-2 text-5xl font-serif font-bold">
+              {overallSummary.percentage}%
+            </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 p-4 text-center">
-              <p className="text-xs text-emerald-700 dark:text-emerald-450 font-semibold">Can skip</p>
-              <p className="mt-2 text-3xl font-serif font-bold text-emerald-600 dark:text-emerald-400">{metrics.canSkip}</p>
+          <div className="mt-4 grid gap-3">
+            <div className="rounded-xl border border-border bg-background p-4 dark:border-border-dark dark:bg-surface-dark-elevated">
+              <p className="text-xs font-semibold uppercase tracking-wider text-foreground-muted dark:text-slate-500">
+                Classes Attended
+              </p>
+              <p className="mt-2 text-3xl font-serif font-bold text-foreground dark:text-white">
+                {overallSummary.attended}
+              </p>
             </div>
-            <div className="rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 p-4 text-center">
-              <p className="text-xs text-red-750 dark:text-red-400 font-semibold">Must attend</p>
-              <p className="mt-2 text-3xl font-serif font-bold text-red-600 dark:text-red-400">{metrics.mustAttend}</p>
+            <div className="rounded-xl border border-border bg-background p-4 dark:border-border-dark dark:bg-surface-dark-elevated">
+              <p className="text-xs font-semibold uppercase tracking-wider text-foreground-muted dark:text-slate-500">
+                Classes Conducted
+              </p>
+              <p className="mt-2 text-3xl font-serif font-bold text-foreground dark:text-white">
+                {overallSummary.total}
+              </p>
             </div>
           </div>
         </div>

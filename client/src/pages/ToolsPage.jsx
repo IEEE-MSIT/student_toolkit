@@ -2,16 +2,10 @@ import ToolCard from '../components/cards/ToolCard';
 
 const allTools = [
   {
-    title: 'CGPA Calculator',
-    description: 'Build your semester CGPA with dynamic subjects, credits, and grades.',
-    href: '/tools/cgpa',
+    title: 'GPA Planner',
+    description: 'Search subjects by code or name, auto-fill credits, and track SGPA plus CGPA together.',
+    href: '/tools/gpa',
     icon: '📘',
-  },
-  {
-    title: 'SGPA Calculator',
-    description: 'Calculate semester GPA with grade points and credits.',
-    href: '/tools/sgpa',
-    icon: '📊',
   },
   {
     title: 'Percentage Calc',

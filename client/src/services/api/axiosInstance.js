@@ -32,7 +32,7 @@ axiosInstance.interceptors.response.use(
       Cookies.remove('token');
       window.location.href = '/login';
     }
-    return Promise.reject(error?.response ?? error);
+    return Promise.reject(error);
   }
 );
 

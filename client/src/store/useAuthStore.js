@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import Cookies from "js-cookie";
+import api from "../services/api/axiosInstance";
 
 export const useAuthStore = create(
   persist(
@@ -26,6 +27,12 @@ export const useAuthStore = create(
         });
       },
 
+      updateUser: (user) => {
+        set((state) => ({
+          user: state.user ? { ...state.user, ...user } : user,
+        }));
+      },
+
       logout: () => {
         Cookies.remove("token");
 
@@ -37,15 +44,27 @@ export const useAuthStore = create(
         });
       },
 
-      restoreSession: () => {
+      restoreSession: async () => {
         const token = Cookies.get("token");
 
         if (token) {
-          set({
-            token,
-            isAuthenticated: true,
-            isLoading: false,
-          });
+          try {
+            const response = await api.get("/user/profile");
+            set({
+              token,
+              user: response.data,
+              isAuthenticated: true,
+              isLoading: false,
+            });
+          } catch (error) {
+            Cookies.remove("token");
+            set({
+              token: null,
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+            });
+          }
         } else {
           set({
             token: null,

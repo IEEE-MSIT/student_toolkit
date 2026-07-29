@@ -5,8 +5,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 const tools = [
   { label: 'Dashboard', path: '/dashboard', icon: FiHome },
   { group: 'Academic', items: [
-    { label: 'CGPA Calculator', path: '/tools/cgpa', icon: FiBookOpen },
-    { label: 'SGPA Calculator', path: '/tools/sgpa', icon: FiBookOpen },
+    { label: 'GPA Planner', path: '/tools/gpa', icon: FiBookOpen },
     { label: 'Percentage Calc', path: '/tools/percentage', icon: FiPercent },
   ]},
   { group: 'Productivity', items: [

@@ -8,6 +8,7 @@ import errorHandler from './middleware/errorHandler.js';
 import holidayRoutes from "./routes/holidayRoutes.js";
 import academicRouter from "./routes/academicRouter.js";
 import calendarRoutes from "./routes/calendarRoutes.js";
+import seedSubjectCatalog from "./utils/seedSubjectCatalog.js";
 dotenv.config({});
 
 
@@ -37,6 +38,9 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 4000;
 
 connectDatabase()
+  .then(() => {
+    return seedSubjectCatalog();
+  })
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Server listening on port ${PORT}`);

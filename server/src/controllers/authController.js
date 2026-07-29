@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
-import { createUserIfNotExists } from './userController.js';
+import { createUserIfNotExists, ensureUsername, serializeUser } from './userController.js';
 
 export const githubCallback = async (req, res) => {
   try {
@@ -105,16 +105,7 @@ export const githubCallback = async (req, res) => {
     );
 
     res.json({
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        college: user.college,
-        branch: user.branch,
-        semester: user.semester,
-        rollNumber: user.rollNumber,
-        theme: user.theme,
-      },
+      user: serializeUser(user),
       token: jwtToken,
     });
   } catch (error) {
@@ -146,6 +137,7 @@ export const mockLogin = async (req, res) => {
     if (!user) {
       user = await User.create(mockUserData);
     }
+    await ensureUsername(user, "dev_student");
     
     const jwtToken = jwt.sign(
       { id: user._id.toString(), email: user.email },
@@ -154,18 +146,7 @@ export const mockLogin = async (req, res) => {
     );
     
     res.json({
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        college: user.college,
-        branch: user.branch,
-        semester: user.semester,
-        rollNumber: user.rollNumber,
-        theme: user.theme,
-        avatar: user.avatar,
-        bio: user.bio
-      },
+      user: serializeUser(user),
       token: jwtToken,
     });
   } catch (error) {

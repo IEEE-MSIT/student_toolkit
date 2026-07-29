@@ -11,7 +11,10 @@ function Topbar() {
   return (
     <header className="flex items-center justify-between gap-4 border-b border-border dark:border-border-dark bg-surface dark:bg-surface-dark px-6 py-4 shadow-card transition-colors duration-300">
       <div>
-        <p className="text-sm text-foreground-muted dark:text-slate-400">Welcome, {user?.name || 'Scholar'}</p>
+        <p className="text-sm text-foreground-muted dark:text-slate-400">
+          Welcome, {user?.name || user?.username || 'Scholar'}
+          {user?.username ? ` · @${user.username}` : ''}
+        </p>
         <h2 className="text-xl font-serif font-semibold text-foreground dark:text-white">Your Academic Hub</h2>
       </div>
       <div className="flex items-center gap-3">
