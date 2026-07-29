@@ -41,7 +41,7 @@ const normalizeScore = (value) => {
     return null;
   }
 
-  return Math.max(0, Math.min(10, score));
+  return Math.max(0, Math.min(100, score));
 };
 
 const buildGpaSummary = (semesters = []) => {
@@ -53,15 +53,17 @@ const buildGpaSummary = (semesters = []) => {
       (sum, entry) => sum + entry.credits,
       0
     );
-    const semesterPoints = semester.entries.reduce(
+    const semesterMarks = semester.entries.reduce(
       (sum, entry) => sum + entry.credits * entry.score,
       0
     );
     const sgpa =
-      semesterCredits > 0 ? Number((semesterPoints / semesterCredits).toFixed(2)) : 0;
+      semesterCredits > 0
+        ? Number(((semesterMarks / semesterCredits) / 10).toFixed(2))
+        : 0;
 
     totalCredits += semesterCredits;
-    totalPoints += semesterPoints;
+    totalPoints += semesterMarks;
 
     return {
       semesterNumber: semester.semesterNumber,
@@ -70,7 +72,8 @@ const buildGpaSummary = (semesters = []) => {
     };
   });
 
-  const cgpa = totalCredits > 0 ? Number((totalPoints / totalCredits).toFixed(2)) : 0;
+  const cgpa =
+    totalCredits > 0 ? Number(((totalPoints / totalCredits) / 10).toFixed(2)) : 0;
 
   return {
     cgpa,

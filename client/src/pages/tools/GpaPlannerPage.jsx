@@ -4,8 +4,6 @@ import toast from "react-hot-toast";
 import { useAuthStore } from "../../store/useAuthStore";
 import api from "../../services/api/axiosInstance";
 
-const SCORE_OPTIONS = Array.from({ length: 11 }, (_, index) => 10 - index);
-
 const createSemester = (semesterNumber) => ({
   semesterNumber,
   entries: [],
@@ -24,18 +22,18 @@ const formatDateTime = (value) => {
 
 const buildSummary = (semesters = []) => {
   let totalCredits = 0;
-  let totalPoints = 0;
+  let totalMarks = 0;
 
   const semesterSummaries = semesters.map((semester) => {
     const credits = semester.entries.reduce((sum, entry) => sum + entry.credits, 0);
-    const points = semester.entries.reduce(
+    const marks = semester.entries.reduce(
       (sum, entry) => sum + entry.credits * Number(entry.score || 0),
       0
     );
-    const sgpa = credits ? (points / credits).toFixed(2) : "0.00";
+    const sgpa = credits ? ((marks / credits) / 10).toFixed(2) : "0.00";
 
     totalCredits += credits;
-    totalPoints += points;
+    totalMarks += marks;
 
     return {
       semesterNumber: semester.semesterNumber,
@@ -45,7 +43,7 @@ const buildSummary = (semesters = []) => {
   });
 
   return {
-    cgpa: totalCredits ? (totalPoints / totalCredits).toFixed(2) : "0.00",
+    cgpa: totalCredits ? ((totalMarks / totalCredits) / 10).toFixed(2) : "0.00",
     totalCredits,
     semesterSummaries,
   };
@@ -181,7 +179,7 @@ function GpaPlannerPage() {
               subjectCode: subject.code,
               subjectName: subject.name,
               credits: subject.credits,
-              score: 10,
+              score: 0,
             },
           ],
         };
@@ -193,6 +191,8 @@ function GpaPlannerPage() {
   };
 
   const updateEntryScore = (semesterNumber, subjectCode, score) => {
+    const normalizedScore = Math.max(0, Math.min(100, Number(score) || 0));
+
     setSemesters((current) =>
       current.map((semester) => {
         if (semester.semesterNumber !== semesterNumber) {
@@ -203,7 +203,7 @@ function GpaPlannerPage() {
           ...semester,
           entries: semester.entries.map((entry) =>
             entry.subjectCode === subjectCode
-              ? { ...entry, score: Number(score) }
+              ? { ...entry, score: normalizedScore }
               : entry
           ),
         };
@@ -252,7 +252,8 @@ function GpaPlannerPage() {
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-foreground-muted dark:text-slate-400">
               Search by subject name or code, pull credits from the subject catalog,
-              and track semester SGPA together with your overall CGPA.
+              type marks out of 100 for each subject, and track semester SGPA together
+              with your overall CGPA.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -373,7 +374,7 @@ function GpaPlannerPage() {
                               Credits
                             </th>
                             <th className="border-b border-border px-3 py-3 text-xs font-semibold uppercase tracking-wider text-foreground-muted dark:border-border-dark dark:text-slate-500">
-                              Score
+                              Marks
                             </th>
                             <th className="border-b border-border px-3 py-3 text-xs font-semibold uppercase tracking-wider text-foreground-muted dark:border-border-dark dark:text-slate-500">
                               Action
@@ -393,7 +394,11 @@ function GpaPlannerPage() {
                                 {entry.credits}
                               </td>
                               <td className="border-b border-border px-3 py-4 dark:border-border-dark">
-                                <select
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.01"
                                   value={entry.score}
                                   onChange={(event) =>
                                     updateEntryScore(
@@ -403,13 +408,10 @@ function GpaPlannerPage() {
                                     )
                                   }
                                   className="w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-all focus:border-primary dark:border-border-dark dark:bg-surface-dark-elevated dark:text-white dark:focus:border-secondary"
-                                >
-                                  {SCORE_OPTIONS.map((score) => (
-                                    <option key={score} value={score}>
-                                      {score} points
-                                    </option>
-                                  ))}
-                                </select>
+                                />
+                                <p className="mt-1 text-xs text-foreground-muted dark:text-slate-500">
+                                  /100
+                                </p>
                               </td>
                               <td className="border-b border-border px-3 py-4 dark:border-border-dark">
                                 <button
@@ -453,7 +455,7 @@ function GpaPlannerPage() {
               {summary.cgpa}
             </p>
             <p className="mt-3 text-sm text-foreground-muted dark:text-slate-400">
-              Across {summary.totalCredits} credits
+              Across {summary.totalCredits} credits, converted from marks out of 100
             </p>
             <p className="mt-2 text-xs text-foreground-muted dark:text-slate-500">
               Last saved: {formatDateTime(lastSavedAt)}
