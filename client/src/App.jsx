@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
@@ -30,14 +30,20 @@ import CalendarPage from "./pages/tools/CalendarPage.jsx";
 
 function AppLayout() {
   const location = useLocation();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-background dark:bg-background-dark text-foreground dark:text-slate-100 transition-colors duration-300">
       <div className="flex min-h-screen">
-        <Sidebar />
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
         <div className="flex-1">
-          <Topbar />
+          <Topbar onMenuClick={() => setIsSidebarOpen(true)} />
 
           <main className="px-6 py-6 sm:px-10">
             <AnimatePresence mode="wait">
@@ -67,7 +73,6 @@ function App() {
 
   if (isLoading) {
     return null;
-    // Replace with a loading spinner if you have one
   }
 
   return (
@@ -75,7 +80,6 @@ function App() {
       <>
         <Routes>
           {/* Public Routes */}
-
           <Route path="/login" element={<LoginPage />} />
           <Route
             path="/auth/github/callback"
@@ -83,45 +87,28 @@ function App() {
           />
 
           {/* Protected Routes */}
-
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
               <Route path="/dashboard" element={<DashboardPage />} />
-
               <Route path="/tools" element={<ToolsPage />} />
-
               <Route path="/settings" element={<SettingsPage />} />
-
               <Route path="/calendar" element={<CalendarPage />} />
-
               <Route path="/tools/gpa" element={<GpaPlannerPage />} />
-
               <Route path="/tools/cgpa" element={<Navigate to="/tools/gpa" replace />} />
-
               <Route path="/tools/sgpa" element={<Navigate to="/tools/gpa" replace />} />
-
               <Route path="/tools/percentage" element={<PercentagePage />} />
-
               <Route path="/tools/image" element={<ImageCompressorPage />} />
-
               <Route path="/tools/attendance" element={<AttendancePage />} />
-
               <Route path="/tools/timetable" element={<TimeTablePage />} />
-
               <Route path="/tools/qr-gen" element={<QRGeneratorPage />} />
-
               <Route path="/tools/qr-scan" element={<QRScannerPage />} />
-
               <Route path="/tools/converter" element={<UnitConverterPage />} />
-
               <Route path="/tools/pdf" element={<PDFMergerPage />} />
             </Route>
           </Route>
 
           {/* 404 */}
-
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
 
