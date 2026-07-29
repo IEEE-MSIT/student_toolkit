@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { FiPlus, FiTrash2 } from "react-icons/fi";
+import { useEffect, useMemo, useState } from "react";
+import { FiPlus, FiSave, FiTrash2 } from "react-icons/fi";
 import toast from "react-hot-toast";
 import api from "../../services/api/axiosInstance";
 
@@ -46,10 +46,10 @@ const formatDateTime = (value) => {
 function AttendanceTrackerPage() {
   const [records, setRecords] = useState([createRecord()]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [saveState, setSaveState] = useState("saved");
   const [lastSavedAt, setLastSavedAt] = useState(null);
-  const saveTimeout = useRef(null);
-  const shouldAutoSave = useRef(false);
 
   useEffect(() => {
     const fetchAttendance = async () => {
@@ -63,48 +63,12 @@ function AttendanceTrackerPage() {
         setRecords([createRecord()]);
       } finally {
         setIsLoading(false);
-        shouldAutoSave.current = true;
+        setHasUnsavedChanges(false);
       }
     };
 
     fetchAttendance();
-
-    return () => {
-      if (saveTimeout.current) {
-        clearTimeout(saveTimeout.current);
-      }
-    };
   }, []);
-
-  useEffect(() => {
-    if (!shouldAutoSave.current || isLoading) {
-      return;
-    }
-
-    if (saveTimeout.current) {
-      clearTimeout(saveTimeout.current);
-    }
-
-    setSaveState("saving");
-    saveTimeout.current = setTimeout(async () => {
-      try {
-        const response = await api.put("/user/attendance", { records });
-        const savedRecords = response.data?.records || [];
-        setRecords(savedRecords.length ? savedRecords : [createRecord()]);
-        setLastSavedAt(response.data?.updatedAt || null);
-        setSaveState("saved");
-      } catch (error) {
-        setSaveState("error");
-        toast.error(getErrorMessage(error, "Failed to save attendance"));
-      }
-    }, 700);
-
-    return () => {
-      if (saveTimeout.current) {
-        clearTimeout(saveTimeout.current);
-      }
-    };
-  }, [records, isLoading]);
 
   const overallSummary = useMemo(() => {
     const totals = records.reduce(
@@ -127,6 +91,8 @@ function AttendanceTrackerPage() {
 
   const handleAddRecord = () => {
     setRecords((current) => [...current, createRecord()]);
+    setHasUnsavedChanges(true);
+    setSaveState("dirty");
   };
 
   const handleRemoveRecord = (index) => {
@@ -134,6 +100,8 @@ function AttendanceTrackerPage() {
       const next = current.filter((_, currentIndex) => currentIndex !== index);
       return next.length ? next : [createRecord()];
     });
+    setHasUnsavedChanges(true);
+    setSaveState("dirty");
   };
 
   const handleChange = (index, field, value) => {
@@ -150,6 +118,28 @@ function AttendanceTrackerPage() {
           : record
       )
     );
+    setHasUnsavedChanges(true);
+    setSaveState("dirty");
+  };
+
+  const saveAttendance = async () => {
+    setIsSaving(true);
+    setSaveState("saving");
+
+    try {
+      const response = await api.put("/user/attendance", { records });
+      const savedRecords = response.data?.records || [];
+      setRecords(savedRecords.length ? savedRecords : [createRecord()]);
+      setLastSavedAt(response.data?.updatedAt || null);
+      setHasUnsavedChanges(false);
+      setSaveState("saved");
+      toast.success("Attendance saved");
+    } catch (error) {
+      setSaveState("error");
+      toast.error(getErrorMessage(error, "Failed to save attendance"));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (isLoading) {
@@ -165,20 +155,32 @@ function AttendanceTrackerPage() {
               Attendance Tracker
             </h1>
             <p className="mt-2 text-sm text-foreground-muted dark:text-slate-400">
-              Attendance saves automatically and stays updated every time you revisit this tool.
+              Update your records smoothly and save them only when you are ready.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm transition-colors dark:border-border-dark dark:bg-surface-dark-elevated">
-            <p className="font-semibold text-foreground dark:text-white">
-              {saveState === "saving"
-                ? "Updating attendance..."
-                : saveState === "error"
-                  ? "Update failed"
-                  : "Attendance synced"}
-            </p>
-            <p className="mt-1 text-xs text-foreground-muted dark:text-slate-400">
-              Last updated: {formatDateTime(lastSavedAt)}
-            </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm transition-colors dark:border-border-dark dark:bg-surface-dark-elevated">
+              <p className="font-semibold text-foreground dark:text-white">
+                {saveState === "saving"
+                  ? "Saving attendance..."
+                  : saveState === "error"
+                    ? "Save failed"
+                    : hasUnsavedChanges
+                      ? "Unsaved changes"
+                      : "Attendance saved"}
+              </p>
+              <p className="mt-1 text-xs text-foreground-muted dark:text-slate-400">
+                Last updated: {formatDateTime(lastSavedAt)}
+              </p>
+            </div>
+            <button
+              onClick={saveAttendance}
+              disabled={isSaving || !hasUnsavedChanges}
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-glow transition-all hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <FiSave className="h-4 w-4" />
+              {isSaving ? "Saving..." : "Save Attendance"}
+            </button>
           </div>
         </div>
       </div>
